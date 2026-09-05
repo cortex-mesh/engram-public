@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  PATH: /opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+  NEXT_TELEMETRY_DISABLED: "1"
+  NPM_CONFIG_UPDATE_NOTIFIER: "false"
+  NPM_CONFIG_FUND: "false"
+
+jobs:
+  changes:
+    name: Detect changed areas
+    # Routed to the self-hosted Titan runner (same pool as the
+    # downstream jobs) so CI doesn't depend on hosted Actions billing.
+    runs-on: [self-hosted, macOS, ARM64]
+    outputs:
+      infra_cdk: ${{ steps.filter.outputs.infra_cdk }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect infra changes
+        id: filter
+        uses: dorny/paths-filter@v4.0.1
+        with:
+          filters: |
+            infra_cdk:
+              - 'infra/cdk/**'
+
+  app:
+    name: Lint, Test, Build
+    needs: changes
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install app dependencies
+        run: npm ci --ignore-scripts --no-audit
+
+      - name: Audit app dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:ci
+
+      - name: Reset integration test database
+        env:
+          PGPASSWORD: engram_test
+        run: |
+          # Wipe and recreate the public schema so each CI run starts from a
+          # known-good state. engram_test is a dedicated test database owned
+          # by the engram_test user; destructive ops here are safe.
+          psql -U engram_test -h localhost -d engram_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          for m in prisma/migrations/*/migration.sql; do
+            echo "Applying $m"
+            psql -U engram_test -h localhost -d engram_test -f "$m"
+          done
+
+      - name: Integration tests
+        env:
+          DATABASE_URL: postgresql://engram_test:engram_test@localhost:5432/engram_test
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build
+
+  infra_cdk:
+    name: Infra CDK
+    needs: changes
+    if: ${{ needs.changes.outputs.infra_cdk == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64]
+    defaults:
+      run:
+        working-directory: infra/cdk
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install infra dependencies
+        run: npm ci
+
+      - name: Infra TypeScript check
+        run: npm run typecheck
+
+      - name: Infra tests
+        run: npm test
+
+      - name: Infra build
+        run: npm run build
+
+      - name: Infra synth
+        env:
+          AWS_REGION: us-west-2
+          HOSTED_ZONE_ID: ZTEST123456
+        run: npm run cdk:synth
+
+  adr-check:
+    name: ADR number check
+    if: github.event_name == 'pull_request'
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check ADR numbers are strictly monotonic (ADR-128)
+        run: bash scripts/check-adr-numbers.sh check
+
+  migration-guard:
+    name: Migration guard
+    if: github.event_name == 'pull_request'
+    runs-on: [self-hosted, macOS, ARM64]
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Block migration PRs without human approval (ADR-128)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash scripts/migration-guard.sh

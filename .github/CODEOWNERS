@@ -1,0 +1,15 @@
+# Code ownership rules for cortex-mesh/engram.
+
+# Deploy manifest — required by cortex ADR-081 amendment 2026-05-06.
+# Anyone with merge rights on this file can change deploy hosts, env var
+# declarations, and pre-deploy hooks for engram across every environment
+# (on-prem and aws-dev today; aws-prod when it ships). Treat changes
+# accordingly — engram is the auth entry for the hosted suite.
+/cortex-deploy.toml @rolme
+
+# Deploy workflow — controls automatic rollout to aws-dev and Rocky/on-prem.
+/.github/workflows/deploy.yml @rolme
+
+# Migration paths — schema changes on the shared multi-tenant DB require human review.
+# Cortex ADR-128 §D4.
+/prisma/migrations/** @rolme

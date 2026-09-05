@@ -1,0 +1,1 @@
+ALTER TYPE "AppKey" ADD VALUE IF NOT EXISTS 'gyrus';

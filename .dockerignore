@@ -1,0 +1,10 @@
+node_modules
+.next
+coverage
+.git
+.env
+infra/cdk/node_modules
+infra/cdk/cdk.out
+infra/cdk/dist
+infra/cdk
+README-host-layout.txt

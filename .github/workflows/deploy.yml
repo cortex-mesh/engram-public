@@ -1,0 +1,136 @@
+name: Deploy Engram
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_aws_dev:
+        description: Deploy to AWS dev
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      deploy_rocky:
+        description: Deploy to on-prem-host/on-prem
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+concurrency:
+  group: engram-deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  PATH: /opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/titan/Library/Python/3.11/bin
+  AWS_REGION: us-west-2
+  AWS_DEFAULT_REGION: us-west-2
+
+jobs:
+  deploy-aws-dev:
+    name: Deploy AWS dev
+    runs-on: [self-hosted, macOS, ARM64]
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_DEV_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEV_DEPLOY_ROLE_ARN }}
+    if: >-
+      ${{
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push') ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.ref == 'refs/heads/main' &&
+         inputs.deploy_aws_dev == 'true')
+      }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve latest main (settle Auto Version)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The CI run that triggered this deploy may have fired on the feature
+          # commit just before Auto Version pushed the `chore(version): bump`
+          # commit. Deploy the latest origin/main so the bump isn't left
+          # undeployed — otherwise aws-dev serves the pre-bump build while the
+          # version label (and any later non-feat/fix commits) silently lag.
+          trigger_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          for attempt in $(seq 1 12); do
+            git fetch --no-tags origin main
+            latest_sha="$(git rev-parse origin/main)"
+            trigger_subject="$(git log -1 --pretty=%s "$trigger_sha" 2>/dev/null || true)"
+            echo "origin/main=${latest_sha} ($(git log -1 --pretty=%s origin/main))"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then break; fi
+            if [ "$latest_sha" != "$trigger_sha" ]; then break; fi
+            if ! echo "$trigger_subject" | grep -Eq '^(fix|feat)(\(.+\))?!?:|BREAKING CHANGE'; then break; fi
+            echo "Waiting for Auto Version to settle (${attempt}/12)"
+            sleep 10
+          done
+          git reset --hard origin/main
+
+      - name: Configure AWS dev credentials
+        if: env.AWS_DEV_DEPLOY_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v6.1.1
+        with:
+          role-to-assume: ${{ env.AWS_DEV_DEPLOY_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Deploy Engram to AWS dev app host using OIDC credentials
+        if: env.AWS_DEV_DEPLOY_ROLE_ARN != ''
+        run: |
+          export INTERNAL_API_KEY="$(~/cortex/.venv/bin/python -c 'import boto3; print(boto3.client("secretsmanager", region_name="us-west-2").get_secret_value(SecretId="cortex/dev/INTERNAL_API_KEY")["SecretString"])')"
+          ~/cortex/.venv/bin/cortex app deploy engram --env aws-dev --repo-path "$GITHUB_WORKSPACE"
+
+      - name: Deploy Engram to AWS dev app host using runner profile
+        if: env.AWS_DEV_DEPLOY_ROLE_ARN == ''
+        env:
+          AWS_PROFILE: cortex
+        run: |
+          export INTERNAL_API_KEY="$(~/cortex/.venv/bin/python -c 'import boto3; print(boto3.client("secretsmanager", region_name="us-west-2").get_secret_value(SecretId="cortex/dev/INTERNAL_API_KEY")["SecretString"])')"
+          ~/cortex/.venv/bin/cortex app deploy engram --env aws-dev --repo-path "$GITHUB_WORKSPACE"
+
+      - name: Verify AWS dev public endpoints
+        run: |
+          curl -skf https://login.dev.ctxhost.com/api/health
+          curl -skf https://platform.dev.ctxhost.com/api/health
+
+  deploy-rocky:
+    name: Deploy on-prem-host/on-prem
+    runs-on: [self-hosted, macOS, ARM64]
+    if: >-
+      ${{
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push') ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.ref == 'refs/heads/main' &&
+         inputs.deploy_rocky == 'true')
+      }}
+
+    steps:
+      - name: Deploy Engram to on-prem-host through Cortex deploy profile
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky@localhost \
+            'set -euo pipefail
+             cd /home/rocky/engram
+             test "$(git branch --show-current)" = main
+             if [ -n "$(git status --porcelain)" ]; then
+               git status --short
+               exit 1
+             fi
+             INTERNAL_API_KEY="$(~/cortex/.venv/bin/cortex vault get INTERNAL_API_KEY)" ~/cortex/.venv/bin/cortex app deploy engram --env on-prem --repo-path /home/rocky/engram'
+
+      - name: Verify on-prem-host public endpoints
+        run: |
+          curl -skf https://login.rapidagent.dev:8443/api/health
+          curl -skf https://platform.rapidagent.dev:8443/api/health

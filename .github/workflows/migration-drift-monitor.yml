@@ -1,0 +1,60 @@
+name: Migration drift monitor
+
+# ADR-032: catch prod schema drift BETWEEN deploys. Prod does not auto-migrate
+# (private RDS; human-gated bastion), so it can silently fall behind `main`.
+# This hits the app's own drift endpoint and goes red when prod is behind,
+# turning latent drift into a visible signal instead of a future incident.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-prod:
+    name: Prod schema currency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query prod migration status
+        env:
+          ENDPOINT: https://auth.ccgtradepost.com/api/health/migrations
+        run: |
+          set -euo pipefail
+          echo "Querying $ENDPOINT"
+          RESP="$(curl -sS --max-time 20 "$ENDPOINT" || true)"
+          if [[ -z "$RESP" ]]; then
+            echo "::warning::migration-monitor: prod migration endpoint unreachable — cannot assess drift."
+            exit 0
+          fi
+          python3 - "$RESP" <<'PY'
+          import json, sys
+          try:
+              d = json.loads(sys.argv[1])
+          except Exception:
+              print("::warning::migration-monitor: non-JSON response (endpoint may predate ADR-032).")
+              sys.exit(0)
+          up = d.get("upToDate")
+          if up is None:
+              print(f"::warning::migration-monitor: status unavailable ({d.get('error')}).")
+              sys.exit(0)
+          pending = d.get("pending") or []
+          ahead = d.get("ahead") or []
+          # RED only on `pending`: the deployed build expects migrations the DB
+          # lacks — code ahead of schema, the 2026-07-22 incident class.
+          if pending:
+              print("::error::migration-monitor: PROD SCHEMA DRIFT — deployed code is ahead of the DB.")
+              print(f"  applied through: {d.get('dbLatestApplied')}")
+              print(f"  pending (apply via bastion runbook): {', '.join(pending)}")
+              sys.exit(1)
+          # `ahead` alone is benign + expected: a migration was applied to prod
+          # ahead of its code deploy (the gate's own apply-then-deploy remedy).
+          # Surface it as a notice, do NOT page.
+          if ahead:
+              print(f"::notice::migration-monitor: prod has migration(s) applied ahead of the running build (apply-then-deploy window): {', '.join(ahead)}")
+              sys.exit(0)
+          print(f"migration-monitor: prod schema current (through {d.get('appliedThrough')}).")
+          sys.exit(0)
+          PY

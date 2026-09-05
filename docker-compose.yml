@@ -1,0 +1,53 @@
+services:
+  engram:
+    container_name: engram
+    image: engram-engram
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # DATABASE_URL intentionally NOT listed here — it comes from env_file
+      # only. Listing it under environment: with ${DATABASE_URL} causes
+      # docker compose to substitute the deploying shell's DATABASE_URL,
+      # which on on-prem-host is set by ~/.cortex/.env to the dashboard DB for
+      # the cortex app CLI. That silently overrides .env and points the
+      # container at the wrong database. Keep it env_file-only.
+      ENGRAM_JWT_SECRET: ${ENGRAM_JWT_SECRET}
+      ENGRAM_URL: ${ENGRAM_URL}
+      ENGRAM_COOKIE_DOMAIN: ${ENGRAM_COOKIE_DOMAIN:-}
+      ENGRAM_INTERNAL_API_KEY: ${ENGRAM_INTERNAL_API_KEY:-}
+      ENGRAM_AXON_ENROLLMENT_API_KEY: ${ENGRAM_AXON_ENROLLMENT_API_KEY:-}
+      ENGRAM_ENROLLMENT_SIGNING_KEY_ID: ${ENGRAM_ENROLLMENT_SIGNING_KEY_ID:-}
+      ENGRAM_ENROLLMENT_SIGNING_PRIVATE_KEY: ${ENGRAM_ENROLLMENT_SIGNING_PRIVATE_KEY:-}
+      ENGRAM_ENROLLMENT_SIGNING_PUBLIC_KEY: ${ENGRAM_ENROLLMENT_SIGNING_PUBLIC_KEY:-}
+      ENGRAM_ENROLLMENT_SIGNING_NOT_BEFORE: ${ENGRAM_ENROLLMENT_SIGNING_NOT_BEFORE:-}
+      ENGRAM_ENROLLMENT_SIGNING_NOT_AFTER: ${ENGRAM_ENROLLMENT_SIGNING_NOT_AFTER:-}
+      ENGRAM_ENROLLMENT_OVERLAP_SIGNING_KEY_ID: ${ENGRAM_ENROLLMENT_OVERLAP_SIGNING_KEY_ID:-}
+      ENGRAM_ENROLLMENT_OVERLAP_SIGNING_PUBLIC_KEY: ${ENGRAM_ENROLLMENT_OVERLAP_SIGNING_PUBLIC_KEY:-}
+      ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_BEFORE: ${ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_BEFORE:-}
+      ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_AFTER: ${ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_AFTER:-}
+      ENGRAM_GOOGLE_CLIENT_ID: ${ENGRAM_GOOGLE_CLIENT_ID:-}
+      ENGRAM_GOOGLE_CLIENT_SECRET: ${ENGRAM_GOOGLE_CLIENT_SECRET:-}
+      ENGRAM_GITHUB_CLIENT_ID: ${ENGRAM_GITHUB_CLIENT_ID:-}
+      ENGRAM_GITHUB_CLIENT_SECRET: ${ENGRAM_GITHUB_CLIENT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Engram <noreply@ctxhost.com>}
+      NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-}
+      NEXT_PUBLIC_SYNAPSE_URL: ${NEXT_PUBLIC_SYNAPSE_URL:-}
+      NEXT_PUBLIC_THOUGHTS_URL: ${NEXT_PUBLIC_THOUGHTS_URL:-}
+      NEXT_PUBLIC_AXON_URL: ${NEXT_PUBLIC_AXON_URL:-}
+      NEXT_PUBLIC_PULSE_URL: ${NEXT_PUBLIC_PULSE_URL:-}
+      NEXT_PUBLIC_GYRUS_URL: ${NEXT_PUBLIC_GYRUS_URL:-}
+      NEXT_PUBLIC_ENGRAM_DEFAULT_LANDING: ${NEXT_PUBLIC_ENGRAM_DEFAULT_LANDING:-}
+      # Comma-separated origin allow-list for credentialed cross-origin
+      # reads (cortex ADR-102). Tenant hosts that mount @cortex-mesh/app-header
+      # must be listed here for the switcher endpoint's CORS to admit them.
+      ENGRAM_ALLOWED_ORIGINS: ${ENGRAM_ALLOWED_ORIGINS:-}
+    ports:
+      - "3104:3104"
+
+networks:
+  default:
+    name: cortex-apps
+    external: true

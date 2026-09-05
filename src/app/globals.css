@@ -1,0 +1,1043 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans-system);
+  --font-mono: var(--font-mono-system);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-chart-success: var(--chart-success);
+  --color-chart-warning: var(--chart-warning);
+  --color-chart-danger: var(--chart-danger);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-text-secondary: var(--text-secondary);
+  --color-navy: var(--navy);
+  --color-green-500: var(--green-500);
+  --color-vermillion: var(--vermillion);
+  --color-teal: var(--teal);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: #6929c4;
+  --chart-2: #1192e8;
+  --chart-3: #005d5d;
+  --chart-4: #9f1853;
+  --chart-5: #878d96;
+  --chart-success: #24a148;
+  --chart-warning: #ba4e00;
+  --chart-danger: #da1e28;
+  --text-secondary: #6b7280;
+  --navy: #3d5a80;
+  --green-500: #22c55e;
+  --vermillion: #c53d43;
+  --teal: #10b981;
+  --font-sans-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono-system: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-display-system: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: #be95ff;
+  --chart-2: #33b1ff;
+  --chart-3: #007d79;
+  --chart-4: #ff7eb6;
+  --chart-5: #a2a9b0;
+  --chart-success: #6fdc8c;
+  --chart-warning: #ff832b;
+  --chart-danger: #ff8389;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.mesh-auth-shell {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem 1rem;
+  overflow: hidden;
+  /* Warm Signal token remap (ADR-029). Scoped here — not :root/.dark — so
+     shared ui/{card,button,input,label}.tsx and every non-auth page keep
+     resolving the original neutral tokens untouched. Placed before the
+     Tradepost section below so its [data-brand-theme="tradepost"]
+     overrides (same specificity, later in source order) keep winning. */
+  --background: oklch(97% 0.008 88);
+  --foreground: oklch(23% 0.015 80);
+  --card: oklch(98.5% 0.006 90);
+  --card-foreground: oklch(23% 0.015 80);
+  --popover: oklch(98.5% 0.006 90);
+  --popover-foreground: oklch(23% 0.015 80);
+  --primary: oklch(23% 0.015 80);
+  --primary-foreground: oklch(97% 0.008 88);
+  --secondary: oklch(91% 0.012 88);
+  --secondary-foreground: oklch(23% 0.015 80);
+  --muted: oklch(94.5% 0.01 88);
+  --muted-foreground: oklch(42% 0.016 80);
+  --accent: oklch(91% 0.012 88);
+  --accent-foreground: oklch(23% 0.015 80);
+  --destructive: oklch(53% 0.19 29);
+  --border: oklch(28% 0.02 80 / 20%);
+  --input: oklch(28% 0.02 80 / 20%);
+  --ring: oklch(50% 0.125 163);
+  background:
+    radial-gradient(120% 60% at 50% -10%, oklch(94.5% 0.01 88 / 0.9), transparent 60%),
+    linear-gradient(180deg, oklch(97% 0.008 88), oklch(95.5% 0.01 87));
+}
+
+/* Scoped to exclude [data-brand-theme="tradepost"] (never edit that section).
+   --mesh-accent/--mesh-human are the only two tokens the base .mesh-auth-shell
+   rule sets that Tradepost's own block does NOT redeclare (every other token
+   there is safely tie-broken by source order) — unscoped, they'd leak the
+   Warm Signal green/amber into Tradepost the moment anything there ever
+   references them. Tradepost's own font-family declarations always list
+   --font-auth-body / --font-auth-display first and only fall back to these
+   on total webfont failure, so that redefinition is empirically inert for
+   Tradepost today — but excluding it here makes that provably true rather
+   than an assumption about next/font's internal fallback behavior. */
+.mesh-auth-shell:not([data-brand-theme="tradepost"]) {
+  --mesh-accent: oklch(50% 0.125 163);
+  --mesh-human: oklch(54% 0.135 72);
+  --font-sans-system: var(--font-schibsted-grotesk, "Avenir Next", system-ui, sans-serif);
+  --font-display-system: var(--font-instrument-serif, "Iowan Old Style", Georgia, serif);
+  /* Redeclaring the custom properties above is not enough on its own: the
+     app's actual font-family is set once, at html/body, from --font-sans at
+     :root — a descendant redefining the custom property never gets consulted
+     by that ancestor rule. Apply the resolved font-family directly here so
+     it inherits down into every descendant of the shell. */
+  font-family: var(--font-sans-system);
+}
+
+.mesh-appearance-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent 18%);
+  background: color-mix(in srgb, var(--card) 86%, transparent 14%);
+  padding: 0.25rem;
+  color: var(--muted-foreground);
+  box-shadow: 0 18px 48px -36px oklch(18% 0.013 78 / 0.5);
+  backdrop-filter: blur(14px);
+}
+
+.mesh-appearance-toggle__label {
+  padding-left: 0.625rem;
+  font-family: var(--font-display-system);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mesh-appearance-toggle__options {
+  display: flex;
+  gap: 0.125rem;
+}
+
+.mesh-appearance-toggle__button {
+  border-radius: 999px;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.mesh-appearance-toggle__button:hover {
+  color: var(--foreground);
+}
+
+.mesh-appearance-toggle__button[data-active="true"] {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+/* Branded wordmarks share the top band with the appearance control on desktop.
+   Stack the control above that band on narrow screens so neither becomes a
+   hit-target or visual collision. */
+@media (max-width: 788px) {
+  .mesh-appearance-toggle {
+    position: static;
+    align-self: center;
+  }
+}
+
+.mesh-auth-shell__hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  max-width: 26rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mesh-auth-shell__brand,
+.mesh-auth-card-intro__eyebrow {
+  font-family: var(--font-display-system);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.mesh-auth-shell__brand {
+  color: color-mix(in srgb, var(--foreground) 88%, white 12%);
+}
+
+.mesh-auth-shell__mark {
+  position: relative;
+  height: 4rem;
+  width: 4rem;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent 18%);
+  background: color-mix(in srgb, white 92%, var(--secondary) 8%);
+  box-shadow: 0 24px 60px -36px oklch(18% 0.013 78 / 0.35);
+}
+
+.mesh-mark {
+  height: 100%;
+  width: 100%;
+}
+
+.mesh-mark__ring {
+  fill: none;
+  stroke: var(--foreground);
+  stroke-opacity: 0.25;
+  stroke-width: 1;
+}
+
+.mesh-mark__line {
+  stroke: var(--foreground);
+  stroke-opacity: 0.25;
+  stroke-width: 1;
+}
+
+.mesh-mark__core {
+  fill: var(--foreground);
+}
+
+.mesh-mark__sat {
+  fill: var(--foreground);
+  fill-opacity: 0.7;
+}
+
+.mesh-mark__sat--accent {
+  fill: var(--mesh-accent);
+}
+
+.mesh-auth-shell__mark-logo {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+.mesh-auth-shell__card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 26rem;
+}
+
+.mesh-auth-shell--compact {
+  gap: 1.25rem;
+  padding-block: 1.5rem;
+}
+
+.mesh-auth-shell--compact .mesh-auth-shell__hero {
+  gap: 0.75rem;
+}
+
+.dark .mesh-auth-shell {
+  --background: oklch(13.5% 0.011 78);
+  --foreground: oklch(93.5% 0.012 85);
+  --card: oklch(16.5% 0.012 78);
+  --card-foreground: oklch(93.5% 0.012 85);
+  --popover: oklch(20% 0.013 78);
+  --popover-foreground: oklch(93.5% 0.012 85);
+  --primary: oklch(93.5% 0.012 85);
+  --primary-foreground: oklch(13.5% 0.011 78);
+  --secondary: oklch(20% 0.013 78);
+  --secondary-foreground: oklch(93.5% 0.012 85);
+  --muted: oklch(20% 0.013 78);
+  --muted-foreground: oklch(71% 0.013 82);
+  --accent: oklch(24.5% 0.014 78);
+  --accent-foreground: oklch(93.5% 0.012 85);
+  --destructive: oklch(67% 0.185 29);
+  --border: oklch(92% 0.02 80 / 16%);
+  --input: oklch(92% 0.02 80 / 9%);
+  --ring: oklch(82% 0.145 163);
+  background:
+    radial-gradient(120% 60% at 50% -10%, oklch(20% 0.013 78 / 0.6), transparent 60%),
+    linear-gradient(180deg, oklch(12.5% 0.011 78), oklch(15% 0.012 78));
+}
+
+/* See the light-mode :not([data-brand-theme="tradepost"]) rule above for why
+   --mesh-accent/--mesh-human need their own exclusion here too. */
+.dark .mesh-auth-shell:not([data-brand-theme="tradepost"]) {
+  --mesh-accent: oklch(82% 0.145 163);
+  --mesh-human: oklch(80% 0.125 72);
+}
+
+.dark .mesh-auth-shell__brand {
+  color: color-mix(in srgb, var(--foreground) 92%, white 8%);
+}
+
+.dark .mesh-auth-shell__mark {
+  border-color: color-mix(in srgb, var(--border) 72%, transparent 28%);
+  background: color-mix(in srgb, var(--card) 82%, black 18%);
+  box-shadow: 0 24px 60px -36px oklch(18% 0.013 78 / 0.7);
+}
+
+.mesh-auth-card-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mesh-auth-card-intro__eyebrow {
+  color: var(--muted-foreground);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+/* Warm Signal ambient + entrance animation (ADR-029). CSS-only; the mark,
+   ambient layer, and entrance classes are wired onto AuthShell markup in
+   Phase 2. prefers-reduced-motion renders everything static and fully
+   visible — no motion, no opacity dip, nothing clipped or hidden. */
+@keyframes markBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.75;
+  }
+}
+
+@keyframes markDrift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(1.5px, -1.5px, 0);
+  }
+}
+
+.mesh-mark__core {
+  animation: markBreathe 5s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.mesh-mark__sat {
+  animation: markDrift 9s ease-in-out infinite alternate;
+  transform-box: fill-box;
+}
+
+.mesh-mark__sat--b {
+  animation-duration: 11s;
+  animation-delay: -4s;
+}
+
+@keyframes meshDriftA {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(2.5rem, -1.5rem, 0);
+  }
+}
+
+@keyframes meshDriftB {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-2rem, 1.75rem, 0);
+  }
+}
+
+@keyframes meshTwinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.mesh-ambient__layer--a {
+  animation: meshDriftA 70s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.mesh-ambient__layer--b {
+  animation: meshDriftB 90s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.mesh-ambient .twinkle {
+  animation: meshTwinkle 7s ease-in-out infinite;
+}
+
+.mesh-ambient .twinkle--late {
+  animation-delay: -3.5s;
+  animation-duration: 9s;
+}
+
+.mesh-enter {
+  animation: fadeInUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mesh-enter--2 {
+  animation-delay: 0.08s;
+}
+
+.mesh-enter--3 {
+  animation-delay: 0.16s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesh-enter,
+  .mesh-enter--2,
+  .mesh-enter--3 {
+    animation: none;
+  }
+
+  .mesh-ambient *,
+  .mesh-auth-shell__mark * {
+    animation: none !important;
+  }
+}
+
+/* Warm Signal ambient decorative layer + headline + mesh-family row (D.3/D.5,
+   ADR-029). Not rendered for the Tradepost theme (see auth-shell.tsx) so its
+   surface stays untouched by construction, not just by CSS override. */
+.mesh-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mesh-ambient__layer {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  color: var(--foreground);
+}
+
+.mesh-ambient__dim {
+  fill: currentColor;
+  fill-opacity: 0.05;
+  stroke: currentColor;
+  stroke-opacity: 0.05;
+  stroke-width: 1;
+}
+
+.mesh-ambient__layer polyline {
+  fill: none;
+}
+
+.dark .mesh-ambient__dim {
+  fill-opacity: 0.07;
+  stroke-opacity: 0.07;
+}
+
+.mesh-ambient__node--accent {
+  fill: var(--mesh-accent);
+  fill-opacity: 0.18;
+}
+
+.mesh-ambient__node--human {
+  fill: var(--mesh-human);
+  fill-opacity: 0.18;
+}
+
+.mesh-auth-shell:not([data-brand-theme="tradepost"]) .mesh-auth-shell__hero .mesh-auth-shell__headline {
+  font-family: var(--font-display-system);
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.mesh-family-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.mesh-family-row__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mesh-family-row__dot {
+  display: inline-block;
+  height: 3px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--mesh-accent);
+}
+
+/* Scoped to exclude [data-brand-theme="tradepost"] entirely (never edit that
+   section — see ADR-028) so Tradepost keeps its existing bg-primary/10
+   text-primary notice styling, gold-tinted via its own --primary, unchanged. */
+.mesh-auth-shell:not([data-brand-theme="tradepost"]) .mesh-notice {
+  background: color-mix(in oklch, var(--mesh-accent) 12%, transparent);
+  color: var(--mesh-accent);
+}
+
+/* Tradepost auth theme. Scoped by ADR-028 so the default Engram auth shell is untouched. */
+[data-brand-theme="tradepost"] {
+  color-scheme: light;
+  --radius: 14px;
+  --background: #f3ede1;
+  --foreground: #221c12;
+  --card: color-mix(in srgb, #9a5b00 5%, #fbf7ee);
+  --card-foreground: #221c12;
+  --popover: color-mix(in srgb, #9a5b00 5%, #fbf7ee);
+  --popover-foreground: #221c12;
+  --primary: #9a5b00;
+  --primary-foreground: #ffffff;
+  --secondary: color-mix(in srgb, #9a5b00 8%, #ebe3d3);
+  --secondary-foreground: #221c12;
+  --muted: color-mix(in srgb, #9a5b00 6%, #ece4d2);
+  --muted-foreground: #635640;
+  --accent: color-mix(in srgb, #9a5b00 8%, #ebe3d3);
+  --accent-foreground: #221c12;
+  --destructive: #c0333a;
+  --border: color-mix(in srgb, #9a5b00 16%, #dcd2bd);
+  --input: color-mix(in srgb, #9a5b00 16%, #dcd2bd);
+  --ring: #9a5b00;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background:
+    radial-gradient(1300px 640px at 74% -12%, color-mix(in srgb, #9a5b00 42%, transparent), transparent 60%),
+    radial-gradient(820px 560px at 6% 4%, color-mix(in srgb, #9a5b00 30%, transparent), transparent 58%),
+    radial-gradient(960px 520px at 18% 114%, color-mix(in srgb, #9a5b00 18%, transparent), transparent 60%),
+    #f3ede1;
+  background-attachment: fixed;
+  font-family: var(--font-auth-body), var(--font-sans-system);
+}
+
+.dark [data-brand-theme="tradepost"] {
+  color-scheme: dark;
+  --radius: 14px;
+  --background: #161210;
+  --foreground: #efe9df;
+  --card: color-mix(in srgb, #ffb300 6%, #1e1915);
+  --card-foreground: #efe9df;
+  --popover: color-mix(in srgb, #ffb300 6%, #1e1915);
+  --popover-foreground: #efe9df;
+  --primary: #ffb300;
+  --primary-foreground: #1a1200;
+  --secondary: color-mix(in srgb, #ffb300 8%, #282119);
+  --secondary-foreground: #efe9df;
+  --muted: color-mix(in srgb, #ffb300 5%, #100d0a);
+  --muted-foreground: #a79c8b;
+  --accent: color-mix(in srgb, #ffb300 8%, #282119);
+  --accent-foreground: #efe9df;
+  --destructive: #f2555a;
+  --border: color-mix(in srgb, #ffb300 14%, #3a3126);
+  --input: color-mix(in srgb, #ffb300 14%, #3a3126);
+  --ring: #ffb300;
+  background:
+    radial-gradient(620px 320px at 82% -10%, color-mix(in srgb, #ffb300 34%, transparent), transparent 64%),
+    radial-gradient(520px 360px at 8% 0%, color-mix(in srgb, #ffb300 16%, transparent), transparent 60%),
+    radial-gradient(720px 360px at 20% 112%, color-mix(in srgb, #ffb300 10%, transparent), transparent 62%),
+    #161210;
+}
+
+[data-brand-theme="tradepost"]::selection,
+[data-brand-theme="tradepost"] *::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+[data-brand-theme="tradepost"] .mesh-appearance-toggle {
+  border-color: var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 88%, transparent 12%);
+  color: var(--muted-foreground);
+  box-shadow: 0 18px 40px -22px rgba(60, 48, 30, 0.35);
+}
+
+.dark [data-brand-theme="tradepost"] .mesh-appearance-toggle {
+  box-shadow: 0 18px 40px -18px rgba(12, 8, 4, 0.65);
+}
+
+[data-brand-theme="tradepost"] .mesh-appearance-toggle__label,
+[data-brand-theme="tradepost"] .mesh-appearance-toggle__button,
+[data-brand-theme="tradepost"] .mesh-auth-card-intro__eyebrow,
+[data-brand-theme="tradepost"] label,
+[data-brand-theme="tradepost"] button,
+[data-brand-theme="tradepost"] [data-slot="button"],
+[data-brand-theme="tradepost"] select {
+  font-family: var(--font-auth-mono), var(--font-mono-system);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+[data-brand-theme="tradepost"] label:has(input[type="checkbox"]) {
+  font-family: var(--font-auth-body), var(--font-sans-system);
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-brand-theme="tradepost"] label:has(input[type="checkbox"]) .text-xs {
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-brand-theme="tradepost"] .mesh-appearance-toggle__label {
+  letter-spacing: 0.08em;
+}
+
+[data-brand-theme="tradepost"] .mesh-appearance-toggle__button[data-active="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__hero {
+  max-width: 30rem;
+  gap: 1.25rem;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__tradepost-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--foreground);
+  font-family: var(--font-auth-body), var(--font-sans-system);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__tradepost-mark {
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+  rotate: 45deg;
+  border-radius: 2px;
+  background: var(--primary);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--primary) 44%, transparent);
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__brand {
+  color: var(--primary);
+  font-family: var(--font-auth-mono), var(--font-mono-system);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__hero .text-lg {
+  color: var(--foreground);
+  font-family: var(--font-auth-display), Georgia, serif;
+  font-size: clamp(1.7rem, 1.35rem + 1.1vw, 2.35rem);
+  font-weight: 650;
+  line-height: 1.05;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__hero .text-sm {
+  color: var(--muted-foreground);
+  font-family: var(--font-auth-body), var(--font-sans-system);
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-shell__card {
+  max-width: 28rem;
+}
+
+[data-brand-theme="tradepost"] [data-slot="card"] {
+  gap: 1.25rem;
+  border-color: var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 94%, transparent 6%);
+  box-shadow: 0 32px 70px -26px rgba(60, 48, 30, 0.4);
+  backdrop-filter: blur(16px);
+}
+
+.dark [data-brand-theme="tradepost"] [data-slot="card"] {
+  box-shadow: 0 34px 80px -26px rgba(12, 8, 4, 0.75);
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-card-intro {
+  gap: 0.875rem;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-card-intro__eyebrow {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-card-intro h1 {
+  color: var(--foreground);
+  font-family: var(--font-auth-display), Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 650;
+  line-height: 1.05;
+}
+
+[data-brand-theme="tradepost"] .mesh-auth-card-intro p:not(.mesh-auth-card-intro__eyebrow),
+[data-brand-theme="tradepost"] [data-slot="card-footer"] p {
+  color: var(--muted-foreground);
+  font-family: var(--font-auth-body), var(--font-sans-system);
+}
+
+[data-brand-theme="tradepost"] [data-slot="input"],
+[data-brand-theme="tradepost"] textarea,
+[data-brand-theme="tradepost"] select {
+  border-color: var(--input);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--background) 76%, var(--card) 24%);
+  color: var(--foreground);
+}
+
+[data-brand-theme="tradepost"] [data-slot="input"]::placeholder,
+[data-brand-theme="tradepost"] textarea::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 82%, transparent 18%);
+}
+
+[data-brand-theme="tradepost"] [data-slot="input"]:focus-visible,
+[data-brand-theme="tradepost"] textarea:focus-visible,
+[data-brand-theme="tradepost"] select:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+[data-brand-theme="tradepost"] input[type="checkbox"] {
+  accent-color: var(--primary);
+}
+
+[data-brand-theme="tradepost"] [data-slot="button"] {
+  border-radius: 9px;
+  font-weight: 700;
+}
+
+[data-brand-theme="tradepost"] [data-slot="button"][data-variant="default"] {
+  box-shadow: 0 18px 40px -22px color-mix(in srgb, var(--primary) 52%, #3c301e 48%);
+}
+
+[data-brand-theme="tradepost"] [data-slot="button"][data-variant="outline"] {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--card) 72%, transparent 28%);
+  color: var(--foreground);
+}
+
+[data-brand-theme="tradepost"] [data-slot="button"][data-variant="outline"]:hover,
+[data-brand-theme="tradepost"] [data-slot="button"][data-variant="secondary"]:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+[data-brand-theme="tradepost"] a {
+  color: var(--primary);
+}
+
+[data-brand-theme="tradepost"] [data-slot="card-footer"] p.text-xs {
+  font-family: var(--font-auth-mono), var(--font-mono-system);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Cite the Move auth theme. It is intentionally independent from both the
+   Engram and Tradepost scopes: graphite, cream, mint, and amber are part of
+   the Cite product identity, while the terminal labels retain the hosted-auth
+   trust cue. */
+[data-brand-theme="citethemove"] {
+  color-scheme: light;
+  --radius: 10px;
+  --background: #ece5d6;
+  --foreground: #242623;
+  --card: #fffaf0;
+  --card-foreground: #242623;
+  --popover: #fffaf0;
+  --popover-foreground: #242623;
+  --primary: #1f8f7a;
+  --primary-foreground: #f9f4e9;
+  --secondary: #ddd4c4;
+  --secondary-foreground: #242623;
+  --muted: #e6dece;
+  --muted-foreground: #61645e;
+  --accent: #d89b31;
+  --accent-foreground: #242623;
+  --destructive: #b6413c;
+  --border: #c7bdac;
+  --input: #c7bdac;
+  --ring: #1f8f7a;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background:
+    linear-gradient(115deg, color-mix(in srgb, #1f8f7a 12%, transparent), transparent 46%),
+    radial-gradient(860px 500px at 102% -8%, color-mix(in srgb, #d89b31 25%, transparent), transparent 66%),
+    #ece5d6;
+  background-attachment: fixed;
+  font-family: var(--font-auth-body), var(--font-sans-system);
+}
+
+.dark [data-brand-theme="citethemove"] {
+  color-scheme: dark;
+  --background: #202421;
+  --foreground: #f2ecdf;
+  --card: #2a2e2a;
+  --card-foreground: #f2ecdf;
+  --popover: #2a2e2a;
+  --popover-foreground: #f2ecdf;
+  --primary: #72d5ba;
+  --primary-foreground: #17201c;
+  --secondary: #353a35;
+  --secondary-foreground: #f2ecdf;
+  --muted: #292d29;
+  --muted-foreground: #b7b6ab;
+  --accent: #efb64e;
+  --accent-foreground: #201a0e;
+  --destructive: #f2746e;
+  --border: #4b524a;
+  --input: #4b524a;
+  --ring: #72d5ba;
+  background:
+    linear-gradient(115deg, color-mix(in srgb, #72d5ba 11%, transparent), transparent 46%),
+    radial-gradient(860px 500px at 102% -8%, color-mix(in srgb, #efb64e 16%, transparent), transparent 66%),
+    #202421;
+}
+
+[data-brand-theme="citethemove"]::selection,
+[data-brand-theme="citethemove"] *::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+[data-brand-theme="citethemove"] .mesh-appearance-toggle {
+  border-color: var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 88%, transparent 12%);
+  color: var(--muted-foreground);
+}
+
+[data-brand-theme="citethemove"] .mesh-appearance-toggle__label,
+[data-brand-theme="citethemove"] .mesh-appearance-toggle__button,
+[data-brand-theme="citethemove"] .mesh-auth-card-intro__eyebrow,
+[data-brand-theme="citethemove"] label,
+[data-brand-theme="citethemove"] button,
+[data-brand-theme="citethemove"] [data-slot="button"] {
+  font-family: var(--font-auth-mono), var(--font-mono-system);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+[data-brand-theme="citethemove"] .mesh-appearance-toggle__button[data-active="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__hero {
+  max-width: 31rem;
+  gap: 1.25rem;
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__citethemove-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--foreground);
+  font-family: var(--font-auth-mono), var(--font-mono-system);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__citethemove-mark {
+  height: 13px;
+  width: 13px;
+  border: 2px solid var(--primary);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 3px var(--card), 0 0 0 3px color-mix(in srgb, var(--accent) 68%, transparent);
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__brand,
+[data-brand-theme="citethemove"] .mesh-auth-card-intro__eyebrow {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__hero .text-lg,
+[data-brand-theme="citethemove"] .mesh-auth-card-intro h1 {
+  color: var(--foreground);
+  font-family: var(--font-auth-display), Georgia, serif;
+  font-weight: 650;
+  line-height: 1.06;
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__hero .text-lg {
+  font-size: clamp(1.7rem, 1.35rem + 1.1vw, 2.35rem);
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-card-intro h1 {
+  font-size: 1.55rem;
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__hero .text-sm,
+[data-brand-theme="citethemove"] .mesh-auth-card-intro p:not(.mesh-auth-card-intro__eyebrow),
+[data-brand-theme="citethemove"] [data-slot="card-footer"] p {
+  color: var(--muted-foreground);
+  font-family: var(--font-auth-body), var(--font-sans-system);
+}
+
+[data-brand-theme="citethemove"] .mesh-auth-shell__card {
+  max-width: 28rem;
+}
+
+[data-brand-theme="citethemove"] [data-slot="card"] {
+  gap: 1.25rem;
+  border-color: var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 94%, transparent 6%);
+  box-shadow: 0 32px 70px -28px color-mix(in srgb, #242623 40%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+[data-brand-theme="citethemove"] [data-slot="input"] {
+  border-color: var(--input);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 60%, var(--card) 40%);
+  color: var(--foreground);
+}
+
+[data-brand-theme="citethemove"] [data-slot="input"]:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+[data-brand-theme="citethemove"] [data-slot="button"] {
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+[data-brand-theme="citethemove"] [data-slot="button"][data-variant="outline"] {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--card) 72%, transparent 28%);
+  color: var(--foreground);
+}
+
+[data-brand-theme="citethemove"] a {
+  color: var(--primary);
+}

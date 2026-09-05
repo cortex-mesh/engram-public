@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Authorization-critical roles are DB enums (audit #12) so an invalid value
+// can't be persisted by a migration, manual edit, or bug. Members per ADR-005
+// and confirmed against live data (on-prem has a legacy platform ADMIN).
+enum PlatformRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum AppKey {
+  dashboard
+  synapse
+  thoughts
+  axon
+  pulse
+  gyrus
+  tradepost
+  fieldops
+}
+
+// Per-org AI provider keys (ADR-021). The plaintext key is never stored here —
+// only the ASM ref, last4 hint, and status metadata.
+enum AiProviderKey {
+  anthropic_api
+  codex
+  kimi
+  openclaw
+  hermes
+}
+
+enum ProviderCredentialStatus {
+  active
+  disabled
+}
+
+enum SignupMode {
+  waitlist
+  open
+}
+
+// Cite the Move enrollment is deliberately separate from Nexus organization,
+// membership, and entitlement state. Only this explicit invitation-controlled
+// record can admit an axon-web identity (ADR-034).
+enum EnrollmentStatus {
+  active
+  revoked
+  expired
+}
+
+// ADR-030: per-app access mode on OrgAppEntitlement. ALL_MEMBERS reproduces
+// today's org-wide admission exactly; RESTRICTED flips the default to deny.
+enum AppAccessMode {
+  ALL_MEMBERS
+  RESTRICTED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  username      String         @unique
+  email         String         @unique
+  displayName   String?
+  passwordHash  String?
+  emailVerified Boolean        @default(false)
+  avatarUrl     String?
+  role          PlatformRole   @default(USER)
+  lastOrgId     String?
+  lastOrg       Organization?  @relation("UserLastOrg", fields: [lastOrgId], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  oauthAccounts OAuthAccount[]
+  magicLinks    MagicLink[]
+  orgMembers    OrgMember[]
+  orgInvites    OrgInvite[]    @relation("OrgInviteInvitedBy")
+  nativeAuthAuthorizationCodes NativeAuthAuthorizationCode[]
+  appOverrides  UserAppEntitlement[]
+  enrollments   Enrollment[]
+}
+
+model Enrollment {
+  id               String           @id @default(cuid())
+  clientId         String
+  // A physical identity deletion must not leave a live admission assertion.
+  // Revoke and deprovision the enrollment explicitly before deleting a user.
+  user             User?            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId           String?
+  subjectId        String
+  status           EnrollmentStatus @default(active)
+  version          Int              @default(1)
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revocationReason String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  events           EnrollmentEvent[]
+
+  @@unique([clientId, subjectId])
+  @@index([clientId, status, expiresAt])
+}
+
+// One strictly ordered chain per client. It is never derived from the suite
+// tenancy model and remains after a particular enrollment is deprovisioned.
+model EnrollmentStream {
+  clientId      String   @id
+  headSequence  Int      @default(0)
+  retainedFrom  Int      @default(1)
+  headEventId   String?
+  headEventHash String?
+  updatedAt     DateTime @updatedAt
+  events        EnrollmentEvent[]
+}
+
+model EnrollmentEvent {
+  id            String           @id @default(cuid())
+  clientId      String
+  enrollment    Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  enrollmentId  String
+  sequence      Int
+  kind          String
+  eventHash     String           @unique
+  previousHash  String?
+  signedJws     String
+  createdAt     DateTime         @default(now())
+  stream        EnrollmentStream @relation(fields: [clientId], references: [clientId], onDelete: Restrict)
+  deliveries    EnrollmentConsumerDelivery[]
+
+  @@unique([clientId, sequence])
+  @@index([clientId, createdAt])
+  @@index([enrollmentId, sequence])
+}
+
+// Acknowledgements are scoped to the authenticated machine consumer, not to a
+// browser session. They are the durable source of truth for delivery status.
+model EnrollmentConsumerAcknowledgement {
+  id            String   @id @default(cuid())
+  consumerId    String
+  clientId      String
+  headSequence  Int
+  headEventId   String?
+  headEventHash String?
+  headJwsHash   String
+  // Event acknowledgements advance headJwsHash. Keep the last separately
+  // receipted snapshot so retention can still prove recoverability.
+  lastSnapshotJwsHash String?
+  acknowledgedAt DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([consumerId, clientId])
+}
+
+// A snapshot is a signed representation, not merely a stream head. Retain the
+// current receipt plus the acknowledgement's receipt; older representations
+// are replaced because a consumer can always fetch a fresh snapshot.
+model EnrollmentSnapshotDelivery {
+  id              String   @id @default(cuid())
+  consumerId      String
+  clientId        String
+  headSequence    Int
+  headEventId     String?
+  headEventHash   String?
+  snapshotJwsHash String
+  deliveredAt     DateTime @default(now())
+
+  @@unique([consumerId, clientId, snapshotJwsHash])
+  @@index([consumerId, clientId, headSequence])
+}
+
+model EnrollmentConsumerDelivery {
+  id         String          @id @default(cuid())
+  consumerId String
+  clientId   String
+  sequence   Int
+  event      EnrollmentEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId    String
+  eventHash  String
+  snapshotJwsHash String?
+  deliveredAt DateTime        @default(now())
+
+  @@unique([consumerId, clientId, sequence])
+  @@index([eventId])
+}
+
+model WaitlistRequest {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  displayName           String?
+  clientId              String?
+  collectionSizeBracket String?
+  formatsPlayed         String[] @default([])
+  tradepostGoals        String[] @default([])
+  priorityNote          String?
+  requestCount          Int      @default(1)
+  lastRequestedAt       DateTime @default(now())
+  emailHygieneStatus    String   @default("accepted")
+  emailHygieneReason    String?
+  emailHygieneCheckedAt DateTime?
+  confirmationEmailSuppressedAt DateTime?
+  approvedAt            DateTime?
+  approvedByUserId      String?
+  approvalEmailSentAt   DateTime?
+  hiddenAt              DateTime?
+  hiddenByUserId        String?
+  hiddenReason          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([hiddenAt, createdAt])
+  @@index([emailHygieneStatus, createdAt])
+}
+
+model EmailSuppression {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  reason            String
+  source            String
+  eventType         String?
+  providerMessageId String?
+  rawEvent          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([reason, updatedAt])
+}
+
+model Organization {
+  id                  String                     @id @default(cuid())
+  name                String                     @unique
+  slug                String                     @unique
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  members             OrgMember[]
+  invites             OrgInvite[]
+  appEntitlements     OrgAppEntitlement[]
+  featureEntitlements OrgAppFeatureEntitlement[]
+  userAppOverrides    UserAppEntitlement[]
+  providerCredentials OrgProviderCredential[]
+  lastOrgUsers        User[]                     @relation("UserLastOrg")
+}
+
+// Per ADR-021: stores only the ASM ref + masked hint — never the plaintext key.
+// @@unique([orgId, provider]) ensures one active binding per provider per org.
+model OrgProviderCredential {
+  id              String                  @id @default(cuid())
+  org             Organization            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  provider        AiProviderKey
+  credentialKind  String                  @default("aws_secrets_manager")
+  credentialRef   String
+  last4           String
+  status          ProviderCredentialStatus @default(active)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  rotatedAt       DateTime?
+  createdByUserId String?
+
+  @@unique([orgId, provider])
+  @@index([orgId])
+}
+
+model OrgAppEntitlement {
+  id                  String                    @id @default(cuid())
+  org                 Organization              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId               String
+  appKey              AppKey
+  enabled             Boolean                   @default(true)
+  accessMode          AppAccessMode             @default(ALL_MEMBERS)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  featureEntitlements OrgAppFeatureEntitlement[]
+
+  @@unique([orgId, appKey])
+}
+
+model OrgAppFeatureEntitlement {
+  id             String            @id @default(cuid())
+  org            Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  appKey         AppKey
+  featureKey     String
+  enabled        Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  appEntitlement OrgAppEntitlement @relation(fields: [orgId, appKey], references: [orgId, appKey], onDelete: Cascade)
+
+  @@unique([orgId, appKey, featureKey])
+}
+
+model UserAppEntitlement {
+  id              String       @id @default(cuid())
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  appKey          AppKey
+  enabled         Boolean
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, orgId, appKey])
+  @@index([orgId, appKey])
+}
+
+model OrgMember {
+  id        String       @id @default(cuid())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  role      OrgRole      @default(MEMBER)
+  createdAt DateTime     @default(now())
+  @@unique([userId, orgId])
+}
+
+model OrgInvite {
+  id              String       @id @default(cuid())
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  email           String
+  role            OrgRole      @default(MEMBER)
+  invitedByUser   User?        @relation("OrgInviteInvitedBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  invitedByUserId String?
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([orgId, email])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  // Set when this token is rotated away. The row is kept (not deleted) so a
+  // benign concurrent/retry refresh presenting the just-rotated token can be
+  // graced within GRACE_WINDOW instead of revoking the family (ADR-031). Null =
+  // active. Consumed rows past the grace window are swept on rotation.
+  consumedAt DateTime?
+  // The AES-GCM-encrypted successor refresh token (set together with consumedAt).
+  // A within-grace reuse returns this SAME successor so all concurrent/retry
+  // refreshes converge on one chain (no parallel session). Cleared with the row
+  // when swept. Raw token is never stored — only ciphertext.
+  replacement String?
+  @@index([userId])
+  @@index([consumedAt])
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model MagicLink {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String    @unique
+  // "login" (passwordless sign-in), "set_password" (verified-email
+  // set-password flow, ADR-017), or "verify_email" (open signup verification).
+  // Consumption requires the expected purpose, so links can't be replayed
+  // across flows.
+  purpose   String    @default("login")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  @@index([userId])
+}
+
+model NativeAuthClient {
+  id                 String                        @id @default(cuid())
+  clientId           String                        @unique
+  displayName        String
+  brandName          String?
+  brandTagline       String?
+  brandLogoUrl       String?
+  brandPrimaryColor  String?
+  emailFromName      String?
+  emailFromAddress   String?
+  emailTemplateTheme String?
+  authProviders      String[]                      @default(["google", "github"])
+  signupMode         SignupMode                    @default(waitlist)
+  enabled            Boolean                       @default(true)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  redirectUris       NativeAuthRedirectUri[]
+  authorizationCodes NativeAuthAuthorizationCode[]
+}
+
+model NativeAuthRedirectUri {
+  id          String           @id @default(cuid())
+  client      NativeAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  clientId    String
+  redirectUri String
+  enabled     Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([clientId, redirectUri])
+  @@index([clientId])
+}
+
+model NativeAuthAuthorizationCode {
+  id            String           @id @default(cuid())
+  codeHash      String           @unique
+  client        NativeAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  clientId      String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  redirectUri   String
+  codeChallenge String
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Security audit trail (audit 2026-06-10, N-4). Deliberately denormalized
+// with NO foreign keys: audit rows must survive deletion of the user/org
+// they reference, so they are never cascade-deleted. actorUserId/orgId are
+// plain strings, not relations.
+model AuditLog {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  action      String
+  outcome     String
+  actorUserId String?
+  actorType   String   @default("user")
+  targetType  String?
+  targetId    String?
+  orgId       String?
+  ip          String?
+  userAgent   String?
+  reason      String?
+  metadata    Json?
+
+  @@index([createdAt])
+  @@index([orgId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}

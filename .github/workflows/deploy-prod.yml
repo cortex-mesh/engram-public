@@ -1,0 +1,144 @@
+name: Deploy Engram Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: "Prod stack or space-separated stacks to deploy"
+        required: true
+        default: "engram-prod-web"
+      hosted_zone_id:
+        description: "ctxhost.com hosted zone ID"
+        required: true
+        default: "Z099959326CYRBW3F5PTA"
+      certificate_arn:
+        description: "us-east-1 ACM certificate ARN after engram-prod-cert deploy"
+        required: false
+      web_acl_arn:
+        description: "us-east-1 CloudFront WebACL ARN after engram-prod-cert deploy"
+        required: false
+      budget_alert_email:
+        description: "Required budget alert email"
+        required: true
+      ref:
+        description: "Commit to deploy. Must be main or an ancestor of it. Use an older commit only to stage a change main cannot ship in one step — see docs/runbooks/prod-promotion.md."
+        required: false
+        default: "main"
+
+concurrency:
+  group: engram-aws-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-aws-prod:
+    name: Deploy aws-prod
+    runs-on: ubuntu-latest
+    environment: aws-prod
+    steps:
+      - name: Check out the requested ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          # Full history so the ancestry gate below can prove the ref is
+          # reachable from main; the default shallow clone cannot.
+          fetch-depth: 0
+
+      # The Actions UI can bypass scripts/promote-prod.sh, so prod must never
+      # rely on the script alone to enforce what it may ship. An arbitrary ref
+      # would let unreviewed code reach the auth service; requiring ancestry of
+      # main keeps the "only reviewed, merged code" guarantee while still
+      # allowing an older commit to be staged.
+      - name: Enforce ref is reachable from main
+        run: |
+          git fetch origin main --quiet
+          resolved="$(git rev-parse HEAD)"
+          echo "requested ref : ${{ inputs.ref }}"
+          echo "resolved sha  : $resolved"
+          echo "origin/main   : $(git rev-parse origin/main)"
+          if ! git merge-base --is-ancestor "$resolved" origin/main; then
+            echo "::error::Refusing to deploy $resolved — it is not an ancestor of origin/main." >&2
+            echo "Only reviewed code that has been merged to main may reach aws-prod." >&2
+            exit 1
+          fi
+          echo "ref is reachable from main ✓"
+
+      - name: Confirm launch-note gate
+        run: |
+          echo "Before dispatching this workflow, complete the aws-prod launch-note checklist and controller CDK diff review."
+          echo "See docs/plans/2026-07-13-engram-prod-serverless-build-codex-goal-prompt.md and the PR DEPLOY REQUEST."
+
+      # The Actions UI can bypass scripts/promote-prod.sh, so keep this
+      # isolation rule on the runner that performs the deploy as well.
+      - name: Enforce cert-stack isolation
+        env:
+          STACK_SET: ${{ inputs.stack }}
+          CERTIFICATE_ARN: ${{ inputs.certificate_arn }}
+          WEB_ACL_ARN: ${{ inputs.web_acl_arn }}
+          HOSTED_ZONE_ID: ${{ inputs.hosted_zone_id }}
+          BUDGET_ALERT_EMAIL: ${{ inputs.budget_alert_email }}
+        run: bash scripts/check-prod-stack-set.sh "$STACK_SET" "$CERTIFICATE_ARN" "$WEB_ACL_ARN" "$HOSTED_ZONE_ID" "$BUDGET_ALERT_EMAIL"
+
+      # ADR-032: block a deploy that would ship code ahead of the prod schema.
+      # Reads prod's applied-migration head from the public health endpoint and
+      # fails if this checkout carries migrations prod hasn't applied yet.
+      - name: Migration drift gate
+        env:
+          STACK_SET: ${{ inputs.stack }}
+        run: |
+          normalized_stack_set="$(printf '%s' "$STACK_SET" | xargs)"
+          if [ "$normalized_stack_set" = "engram-prod-cert" ]; then
+            echo "Skipping migration drift gate for the isolated cert stack."
+            exit 0
+          fi
+          bash scripts/check-prod-migration-gate.sh
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Build OpenNext artifact
+        run: npm run build:opennext
+
+      - name: Install CDK dependencies
+        working-directory: infra/cdk
+        run: npm ci
+
+      - name: Configure AWS prod credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.1
+        with:
+          role-to-assume: arn:aws:iam::782369544445:role/EngramAwsProdGithubDeploy
+          aws-region: us-west-2
+
+      - name: CDK diff
+        working-directory: infra/cdk
+        env:
+          ENGRAM_ENABLE_PROD_STACKS: "1"
+          ENGRAM_PROD_HOSTED_ZONE_ID: ${{ inputs.hosted_zone_id }}
+          ENGRAM_PROD_CERTIFICATE_ARN: ${{ inputs.certificate_arn }}
+          ENGRAM_PROD_WEB_ACL_ARN: ${{ inputs.web_acl_arn }}
+          ENGRAM_PROD_BUDGET_ALERT_EMAIL: ${{ inputs.budget_alert_email }}
+          STACK_SET: ${{ inputs.stack }}
+        run: npx cdk diff $STACK_SET
+
+      - name: CDK deploy
+        working-directory: infra/cdk
+        env:
+          ENGRAM_ENABLE_PROD_STACKS: "1"
+          ENGRAM_PROD_HOSTED_ZONE_ID: ${{ inputs.hosted_zone_id }}
+          ENGRAM_PROD_CERTIFICATE_ARN: ${{ inputs.certificate_arn }}
+          ENGRAM_PROD_WEB_ACL_ARN: ${{ inputs.web_acl_arn }}
+          ENGRAM_PROD_BUDGET_ALERT_EMAIL: ${{ inputs.budget_alert_email }}
+          STACK_SET: ${{ inputs.stack }}
+        run: npx cdk deploy --exclusively --require-approval never $STACK_SET

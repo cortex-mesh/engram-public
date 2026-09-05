@@ -1,0 +1,295 @@
+# cortex-deploy.toml — per-app deploy manifest for engram.
+#
+# Source of truth for engram's packaging contract across every environment
+# it deploys to (cortex ADR-081 §4.1). The `cortex app deploy` CLI reads
+# this from the operator's local checkout; Plexus stores a snapshot per
+# deploy for Mission Control display, but is not the source of truth.
+#
+# Validate locally:
+#   cortex app deploy --validate-manifest --repo-path . --env aws-dev
+
+schema_version = 1
+
+[app]
+name = "engram"
+repo = "cortex-mesh/engram"
+
+[bundle]
+exclude = ["node_modules", ".next", ".git", ".turbo"]
+
+# On-prem (on-prem-host) — the existing `cortex app deploy engram` flow.
+# Container is named `engram`, port 3104, /api/health.
+[environments.on-prem]
+host_app_dir  = "/home/rocky/engram"
+compose_file  = "docker-compose.yml"
+env_file_path = ".env"
+health_url    = "http://localhost:3104/api/health"
+
+[[environments.on-prem.caddy_sites]]
+hostname = "login.rapidagent.dev:8443"
+upstream = "127.0.0.1:3104"
+
+[[environments.on-prem.caddy_sites]]
+hostname = "platform.rapidagent.dev:8443"
+upstream = "127.0.0.1:3104"
+
+# AWS-dev — hosted engram at login.dev.ctxhost.com (auth entry) and
+# platform.dev.ctxhost.com (platform admin). Same container, two Caddy
+# vhosts. Already live; this block captures what's deployed.
+[environments.aws-dev]
+ssm_target_tag = "cortex-dev-app-host"
+host_app_dir   = "/opt/cortex/apps/engram"
+compose_file   = "docker-compose.yml"
+env_file_path  = ".env"
+secrets_bundle = "engram-dev-runtime"
+s3_bucket      = "cortex-dev-deploy"
+health_url     = "https://login.dev.ctxhost.com/api/health"
+
+[[environments.aws-dev.caddy_sites]]
+hostname = "login.dev.ctxhost.com"
+upstream = "127.0.0.1:3104"
+
+[[environments.aws-dev.caddy_sites]]
+hostname = "platform.dev.ctxhost.com"
+upstream = "127.0.0.1:3104"
+
+# Container env vars — declared once with per-environment scope. The
+# aws-dev strategy materializes these from AWS Secrets Manager via the
+# ADR-075 §6 resolver chain at deploy time. On-prem reads from the
+# pre-existing host file unchanged (ADR-081 §6).
+
+[[env_vars]]
+name         = "DATABASE_URL"
+secret_key   = "DATABASE_URL"
+required     = true
+environments = ["aws-dev"]
+
+# AWS region for the boto/SDK clients used by the per-org provider-credential
+# store (ADR-021): src/lib/asm-client.ts gates ALL live AWS Secrets Manager
+# calls on AWS_REGION — if it is unset the writer silently no-ops and the
+# reader throws. Sourced from the engram-dev-runtime bundle (a non-secret
+# value living alongside the other aws-dev config there). aws-dev ONLY: on
+# on-prem there is no ASM, and setting AWS_REGION would wrongly activate the
+# client against a host with no AWS access.
+# required = true: if the bundle key ever vanishes, fail the deploy loudly
+# rather than silently re-introducing the no-op (the exact bug this fixes).
+# Always-present aws-dev config, like DATABASE_URL/ENGRAM_URL.
+[[env_vars]]
+name         = "AWS_REGION"
+secret_key   = "AWS_REGION"
+required     = true
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_JWT_SECRET"
+secret_key   = "ENGRAM_JWT_SECRET"
+required     = true
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_URL"
+secret_key   = "ENGRAM_URL"
+required     = true
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_COOKIE_DOMAIN"
+secret_key   = "ENGRAM_COOKIE_DOMAIN"
+required     = false
+environments = ["aws-dev"]
+
+# Comma-separated list of tenant origins allowed to make credentialed
+# fetches against Engram (CORS allow-list, read by src/lib/cors.ts).
+# Without this, the cross-app fetch from tenant subdomains —
+# e.g. https://cortex.dev.ctxhost.com — to /api/me/app-switcher is
+# blocked by the browser's CORS preflight, and the shared AppHeader
+# (cortex ADR-102) falls back to its unauthenticated state.
+[[env_vars]]
+name         = "ENGRAM_ALLOWED_ORIGINS"
+secret_key   = "ENGRAM_ALLOWED_ORIGINS"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_INTERNAL_API_KEY"
+secret_key   = "ENGRAM_INTERNAL_API_KEY"
+required     = false
+environments = ["aws-dev"]
+
+# Cite enrollment is enabled in aws-dev after its dedicated signing secret is
+# provisioned. On-prem maps these names from its existing .env but may leave
+# them empty: enrollment then denies internally while the shared IdP stays up.
+# The aws-dev pre-deploy hook below is the strict configuration gate.
+[[env_vars]]
+name         = "ENGRAM_AXON_ENROLLMENT_API_KEY"
+secret_key   = "ENGRAM_AXON_ENROLLMENT_API_KEY"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_SIGNING_KEY_ID"
+secret_key   = "ENGRAM_ENROLLMENT_SIGNING_KEY_ID"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_SIGNING_PRIVATE_KEY"
+secret_key   = "ENGRAM_ENROLLMENT_SIGNING_PRIVATE_KEY"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_SIGNING_PUBLIC_KEY"
+secret_key   = "ENGRAM_ENROLLMENT_SIGNING_PUBLIC_KEY"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_SIGNING_NOT_BEFORE"
+secret_key   = "ENGRAM_ENROLLMENT_SIGNING_NOT_BEFORE"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_SIGNING_NOT_AFTER"
+secret_key   = "ENGRAM_ENROLLMENT_SIGNING_NOT_AFTER"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_KEY_ID"
+secret_key   = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_KEY_ID"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_PUBLIC_KEY"
+secret_key   = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_PUBLIC_KEY"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_BEFORE"
+secret_key   = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_BEFORE"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_AFTER"
+secret_key   = "ENGRAM_ENROLLMENT_OVERLAP_SIGNING_NOT_AFTER"
+required     = false
+environments = ["on-prem", "aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_ENABLE_NATIVE_AUTH_FIXTURE"
+secret_key   = "ENGRAM_ENABLE_NATIVE_AUTH_FIXTURE"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_GOOGLE_CLIENT_ID"
+secret_key   = "ENGRAM_GOOGLE_CLIENT_ID"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_GOOGLE_CLIENT_SECRET"
+secret_key   = "ENGRAM_GOOGLE_CLIENT_SECRET"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_GITHUB_CLIENT_ID"
+secret_key   = "ENGRAM_GITHUB_CLIENT_ID"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "ENGRAM_GITHUB_CLIENT_SECRET"
+secret_key   = "ENGRAM_GITHUB_CLIENT_SECRET"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "RESEND_API_KEY"
+secret_key   = "RESEND_API_KEY"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "EMAIL_FROM"
+secret_key   = "EMAIL_FROM"
+required     = false
+environments = ["aws-dev"]
+
+# Without this the domain guard in lib/email silently rejects a client's
+# branded sender and falls back to the default one, so branded clients mail
+# from the wrong domain. It was set in the secret but never declared here, so
+# it never reached the container — and dev quietly diverged from prod.
+[[env_vars]]
+name         = "EMAIL_VERIFIED_DOMAINS"
+secret_key   = "EMAIL_VERIFIED_DOMAINS"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_DASHBOARD_URL"
+secret_key   = "NEXT_PUBLIC_DASHBOARD_URL"
+# Optional by design: unset app URLs are hidden from the switcher and omitted
+# from redirect allowlists. Never fall back to dev hosts in production.
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_SYNAPSE_URL"
+secret_key   = "NEXT_PUBLIC_SYNAPSE_URL"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_THOUGHTS_URL"
+secret_key   = "NEXT_PUBLIC_THOUGHTS_URL"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_AXON_URL"
+secret_key   = "NEXT_PUBLIC_AXON_URL"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_PULSE_URL"
+secret_key   = "NEXT_PUBLIC_PULSE_URL"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_GYRUS_URL"
+secret_key   = "NEXT_PUBLIC_GYRUS_URL"
+required     = false
+environments = ["aws-dev"]
+
+[[env_vars]]
+name         = "NEXT_PUBLIC_ENGRAM_DEFAULT_LANDING"
+secret_key   = "NEXT_PUBLIC_ENGRAM_DEFAULT_LANDING"
+required     = false
+environments = ["aws-dev"]
+
+# Prisma migrations are applied as a one-shot before the new container
+# starts. This keeps schema drift from surfacing only after login/tenant
+# authorization traffic reaches the app.
+[[pre_deploy]]
+kind         = "in-image"
+command      = "docker run --rm --network cortex-apps --env-file {env_file} {image} npx prisma migrate deploy"
+environments = ["on-prem"]
+
+[[pre_deploy]]
+kind         = "in-image"
+command      = "docker run --rm --env-file {env_file} {image} node scripts/validate-enrollment-startup.mjs"
+environments = ["aws-dev"]
+
+[[pre_deploy]]
+kind         = "in-image"
+command      = "docker run --rm --env-file {env_file} {image} npx prisma migrate deploy"
+environments = ["aws-dev"]
