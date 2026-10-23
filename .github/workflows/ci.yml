@@ -11,7 +11,6 @@ permissions:
   pull-requests: read
 
 env:
-  PATH: /opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
   NEXT_TELEMETRY_DISABLED: "1"
   NPM_CONFIG_UPDATE_NOTIFIER: "false"
   NPM_CONFIG_FUND: "false"
@@ -19,9 +18,9 @@ env:
 jobs:
   changes:
     name: Detect changed areas
-    # Routed to the self-hosted Titan runner (same pool as the
-    # downstream jobs) so CI doesn't depend on hosted Actions billing.
-    runs-on: [self-hosted, macOS, ARM64]
+    # GitHub-hosted runner. This public repo must not target the self-hosted
+    # macOS pool: fork PR code would execute on the fleet.
+    runs-on: ubuntu-latest
     outputs:
       infra_cdk: ${{ steps.filter.outputs.infra_cdk }}
     steps:
@@ -39,10 +38,31 @@ jobs:
   app:
     name: Lint, Test, Build
     needs: changes
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: engram_test
+          POSTGRES_PASSWORD: engram_test
+          POSTGRES_DB: engram_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U engram_test -d engram_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install app dependencies
         run: npm ci --ignore-scripts --no-audit
@@ -62,6 +82,7 @@ jobs:
       - name: Unit tests
         run: npm run test:ci
 
+      # 127.0.0.1, not localhost: tests/integration/setup.ts rejects any DATABASE_URL containing "localhost".
       - name: Reset integration test database
         env:
           PGPASSWORD: engram_test
@@ -69,15 +90,15 @@ jobs:
           # Wipe and recreate the public schema so each CI run starts from a
           # known-good state. engram_test is a dedicated test database owned
           # by the engram_test user; destructive ops here are safe.
-          psql -U engram_test -h localhost -d engram_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          psql -U engram_test -h 127.0.0.1 -d engram_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
           for m in prisma/migrations/*/migration.sql; do
             echo "Applying $m"
-            psql -U engram_test -h localhost -d engram_test -f "$m"
+            psql -U engram_test -h 127.0.0.1 -d engram_test -f "$m"
           done
 
       - name: Integration tests
         env:
-          DATABASE_URL: postgresql://engram_test:engram_test@localhost:5432/engram_test
+          DATABASE_URL: postgresql://engram_test:engram_test@127.0.0.1:5432/engram_test
         run: npm run test:integration
 
       - name: Build
@@ -87,13 +108,20 @@ jobs:
     name: Infra CDK
     needs: changes
     if: ${{ needs.changes.outputs.infra_cdk == 'true' }}
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: infra/cdk
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/cdk/package-lock.json
 
       - name: Install infra dependencies
         run: npm ci
@@ -116,7 +144,7 @@ jobs:
   adr-check:
     name: ADR number check
     if: github.event_name == 'pull_request'
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
@@ -127,7 +155,7 @@ jobs:
   migration-guard:
     name: Migration guard
     if: github.event_name == 'pull_request'
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
