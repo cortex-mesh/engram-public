@@ -82,6 +82,7 @@ jobs:
       - name: Unit tests
         run: npm run test:ci
 
+      # 127.0.0.1, not localhost: tests/integration/setup.ts rejects any DATABASE_URL containing "localhost".
       - name: Reset integration test database
         env:
           PGPASSWORD: engram_test
@@ -89,15 +90,15 @@ jobs:
           # Wipe and recreate the public schema so each CI run starts from a
           # known-good state. engram_test is a dedicated test database owned
           # by the engram_test user; destructive ops here are safe.
-          psql -U engram_test -h localhost -d engram_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          psql -U engram_test -h 127.0.0.1 -d engram_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
           for m in prisma/migrations/*/migration.sql; do
             echo "Applying $m"
-            psql -U engram_test -h localhost -d engram_test -f "$m"
+            psql -U engram_test -h 127.0.0.1 -d engram_test -f "$m"
           done
 
       - name: Integration tests
         env:
-          DATABASE_URL: postgresql://engram_test:engram_test@localhost:5432/engram_test
+          DATABASE_URL: postgresql://engram_test:engram_test@127.0.0.1:5432/engram_test
         run: npm run test:integration
 
       - name: Build
